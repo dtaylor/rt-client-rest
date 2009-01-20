@@ -1,0 +1,12 @@
+This is a TODO file.  I will be checking things off as they get
+implemented.
+
+- Fetch forms from RT and verify CFs etc. based on that on the client
+  side because of RT REST's non-atomicity -- i.e. some fields/values
+  will go through correctly, while others will give syntax/permission
+  errors.
+
+  Based on discussion with Jesse Vincent (obra) on #rt@irc.perl.org
+  on 7/25/2006.
+
+- Write user manual.
