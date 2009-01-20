@@ -160,31 +160,45 @@ sub new {
 
     my $self = bless {}, ref($class) || $class;
     my %opts = @_;
+    $opts{rt_version} ||= '3.8';
 
-    my $id = delete($opts{id});
-    if (defined($id)) {{
+    my $id = delete $opts{id};
+    if ( defined $id ) {{
         $self->id($id);
         if ($self->can('parent_id')) {
             # If object can parent_id, we assume that it's needed for
             # retrieval.
-            my $parent_id = delete($opts{parent_id});
-            if (defined($parent_id)) {
+            my $parent_id = delete $opts{parent_id};
+            if ( defined $parent_id ) {
                 $self->parent_id($parent_id);
             } else {
                 last;
             }
         }
-        if ($self->autoget) {
+        if ( $self->autoget() ) {
             $self->retrieve;
         }
     }}
 
-    while (my ($k, $v) = each(%opts)) {
+    while ( my ($k, $v) = each(%opts) ) {
         $self->$k($v);
+    }
+
+    if ( $opts{rt_version} eq '3.8' ) {
+        $self->_forms(RT::Client::REST::Forms38->new());
+    }
+    else {
+        $self->_forms(RT::Client::REST::Forms36->new());
     }
 
     return $self;
 }
+
+sub _forms {
+    my $self = shift;
+    $self->{'_forms'} = shift if @_;
+    return $self->{'_forms'};
+};
 
 =item _generate_methods
 
@@ -435,29 +449,31 @@ sub from_form {
     }
 
     # Now set attbibutes:
+    my $cf_spec = $self->_forms()->custom_field_spec(1);
     while (my ($key, $value) = each(%$hash)) {
-        if ($key =~ s/^cf-//) { # Handle custom fields.
-            if ($value =~ /,/) {    # OK, this is questionable.
+        if ($key =~ /^$cf_spec/) { # Handle custom fields.
+            my $name = $1 || $2;   # new style is $1 and old style is $2
+            if ($value =~ /,/) {   # OK, this is questionable.
                 $value = [ split(/\s*,\s*/, $value) ];
             }
 
-            $self->cf($key, $value);
+            $self->cf($name, $value);
             next;
         }
 
-        unless (exists($rest2attr{$key})) {
+        unless ( exists $rest2attr{$key} ) {
             warn "Unknown key: $key\n";
             next;
         }
 
-        if ($value =~ m/not set/i) {
+        if ( $value =~ m/not set/i ) {
             $value = undef;
         }
 
         my $method = $rest2attr{$key};
-        if (exists($attributes->{$method}{form2value})) {
+        if (exists $attributes->{$method}{form2value} ) {
             $value = $attributes->{$method}{form2value}($value);
-        } elsif ($attributes->{$method}{list}) {
+        } elsif ( $attributes->{$method}{list} ) {
             $value = [split(/\s*,\s*/, $value)],
         }
         $self->$method($value);
