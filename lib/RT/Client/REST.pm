@@ -31,11 +31,12 @@ use Error qw(:try);
 use HTTP::Cookies;
 use HTTP::Request::Common;
 use RT::Client::REST::Exception 0.18;
-use RT::Client::REST::Forms;
+use RT::Client::REST::Forms36;
+use RT::Client::REST::Forms38;
 use RT::Client::REST::HTTPClient;
 
 # Generate accessors/mutators
-for my $method (qw(server _cookie timeout)) {
+for my $method (qw(server _cookie timeout version forms)) {
     no strict 'refs';
     *{__PACKAGE__ . '::' . $method} = sub {
         my $self = shift;
@@ -51,9 +52,17 @@ sub new {
 
     my $self = bless {}, ref($class) || $class;
     my %opts = @_;
+    $opts{version} ||= '3.8';
 
     while (my ($k, $v) = each(%opts)) {
         $self->$k($v);
+    }
+    
+    if ($self->version eq '3.8') {
+        $self->forms(RT::Client::REST::Forms38->new());
+    }
+    else {
+        $self->forms(RT::Client::REST::Forms36->new());
     }
 
     return $self;
@@ -111,7 +120,7 @@ sub show {
         $id = $self->_valid_numeric_object_id(delete($opts{id}));
     }
 
-    my $form = form_parse($self->_submit("$type/$id")->decoded_content);
+    my $form = $self->forms()->form_parse($self->_submit("$type/$id")->decoded_content);
     my ($c, $o, $k, $e) = @{$$form[0]};
 
     if (!@$o && $c) {
@@ -123,15 +132,13 @@ sub show {
 
 sub get_attachment_ids {
     my $self = shift;
-
     $self->_assert_even(@_);
-
     my %opts = @_;
 
     my $type = $self->_valid_type(delete($opts{type}) || 'ticket');
-    my $id = $self->_valid_numeric_object_id(delete($opts{id}));
+    my $id   = $self->_valid_numeric_object_id(delete($opts{id}));
 
-    my $form = form_parse(
+    my $form = $self->forms()->form_parse(
         $self->_submit("$type/$id/attachments/")->decoded_content
     );
     my ($c, $o, $k, $e) = @{$$form[0]};
@@ -150,11 +157,11 @@ sub get_attachment {
 
     my %opts = @_;
 
-    my $type = $self->_valid_type(delete($opts{type}) || 'ticket');
+    my $type      = $self->_valid_type(delete($opts{type}) || 'ticket');
     my $parent_id = $self->_valid_numeric_object_id(delete($opts{parent_id}));
-    my $id = $self->_valid_numeric_object_id(delete($opts{id}));
+    my $id        = $self->_valid_numeric_object_id(delete($opts{id}));
 
-    my $form = form_parse(
+    my $form = $self->forms()->form_parse(
         $self->_submit("$type/$parent_id/attachments/$id")->decoded_content
     );
     my ($c, $o, $k, $e) = @{$$form[0]};
@@ -168,20 +175,18 @@ sub get_attachment {
 
 sub get_transaction_ids {
     my $self = shift;
-
     $self->_assert_even(@_);
-
     my %opts = @_;
 
-    my $parent_id = $self->_valid_numeric_object_id(delete($opts{parent_id}));
-    my $type = $self->_valid_type(delete($opts{type}) || 'ticket');
+    my $parent_id = $self->_valid_numeric_object_id( delete $opts{parent_id} );
+    my $type = $self->_valid_type( delete $opts{type} || 'ticket' );
 
     my $path;
-    my $tr_type = delete($opts{transaction_type});
-    if (!defined($tr_type)) {
+    my $tr_type = delete $opts{transaction_type};
+    if ( !defined $tr_type ) {
         # Gotta catch 'em all!
         $path = "$type/$parent_id/history";
-    } elsif ('ARRAY' eq ref($tr_type)) {
+    } elsif ( 'ARRAY' eq ref $tr_type ) {
         # OK, more than one type.  Call ourselves for each.
         # NOTE: this may be very expensive.
         return sort map {
@@ -199,7 +204,7 @@ sub get_transaction_ids {
         $path = "$type/$parent_id/history/type/$tr_type"
     }
 
-    my $form = form_parse( $self->_submit($path)->decoded_content );
+    my $form = $self->forms()->form_parse( $self->_submit($path)->decoded_content );
     my ($c, $o, $k, $e) = @{$$form[0]};
 
     if (!length($e)) {
@@ -216,16 +221,14 @@ sub get_transaction_ids {
 
 sub get_transaction {
     my $self = shift;
-
     $self->_assert_even(@_);
-
     my %opts = @_;
 
-    my $type = $self->_valid_type(delete($opts{type}) || 'ticket');
+    my $type      = $self->_valid_type(delete($opts{type}) || 'ticket');
     my $parent_id = $self->_valid_numeric_object_id(delete($opts{parent_id}));
-    my $id = $self->_valid_numeric_object_id(delete($opts{id}));
+    my $id        = $self->_valid_numeric_object_id(delete($opts{id}));
 
-    my $form = form_parse(
+    my $form = $self->forms()->form_parse(
         $self->_submit("$type/$parent_id/history/id/$id")->decoded_content
     );
     my ($c, $o, $k, $e) = @{$$form[0]};
@@ -239,14 +242,12 @@ sub get_transaction {
 
 sub search {
     my $self = shift;
-
     $self->_assert_even(@_);
-
     my %opts = @_;
 
-    my $type = $self->_valid_type(delete($opts{type}));
-    my $query = delete($opts{query});
-    my $orderby = delete($opts{orderby});
+    my $type    = $self->_valid_type(delete($opts{type}));
+    my $query   = delete $opts{query};
+    my $orderby = delete $opts{orderby};
 
     my $r = $self->_submit("search/$type", {
         query => $query,
@@ -261,32 +262,32 @@ sub edit {
     $self->_assert_even(@_);
     my %opts = @_;
 
-    my $type = $self->_valid_type(delete($opts{type}));
+    my $type = $self->_valid_type( delete $opts{type} );
 
-    my $id = delete($opts{id});
-    unless ('new' eq $id) {
+    my $id = delete $opts{id};
+    unless ( 'new' eq $id ) {
         $id = $self->_valid_numeric_object_id($id);
     }
 
     my %set;
-    if (defined(my $set = delete($opts{set}))) {
-        while (my ($k, $v) = each(%$set)) {
-            vpush(\%set, lc($k), $v);
+    if ( defined( my $set = delete $opts{set} ) ) {
+        while ( my ($k, $v) = each %$set ) {
+            $self->forms()->vpush(\%set, lc($k), $v);
         }
     }
-    if (defined(my $text = delete($opts{text}))) {
+    if ( defined( my $text = delete $opts{text} ) ) {
         $text =~ s/(\n\r?)/$1 /g;
-        vpush(\%set, 'text', $text);
+        $self->forms()->vpush(\%set, 'text', $text);
     }
     $set{id} = "$type/$id";
 
     my $r = $self->_submit('edit', {
-        content => form_compose([['', [keys %set], \%set]])
+        content => $self->forms()->form_compose([['', [keys %set], \%set]])
     });
 
     # This seems to be a bug on the server side: returning 200 Ok when
     # ticket creation (for instance) fails.  We check it here:
-    if ($r->decoded_content =~ /not/) {
+    if ( $r->decoded_content =~ /not/ ) {
         RT::Client::REST::Exception->_rt_content_to_exception($r->decoded_content)
         ->throw(
             code    => $r->code,
@@ -309,32 +310,33 @@ sub comment {
     my $self = shift;
     $self->_assert_even(@_);
     my %opts = @_;
-    my $action = $self->_valid_comment_action(
+
+    my $action    = $self->_valid_comment_action(
         delete($opts{comment_action}) || 'comment');
-    my $ticket_id = $self->_valid_numeric_object_id(delete($opts{ticket_id}));
-    my $msg = $self->_valid_comment_message(delete($opts{message}));
+    my $ticket_id = $self->_valid_numeric_object_id( delete $opts{ticket_id} );
+    my $msg       = $self->_valid_comment_message( delete $opts{message} );
 
     my @objects = ("Ticket", "Action", "Text");
     my %values  = (
-        Ticket      => $ticket_id,
-        Action      => $action,
-        Text        => $msg,
+        Ticket => $ticket_id,
+        Action => $action,
+        Text   => $msg,
     );
 
-    if (exists($opts{cc})) {
+    if ( exists $opts{cc} ) {
         push @objects, "Cc";
-        $values{Cc} = delete($opts{cc});
+        $values{Cc} = delete $opts{cc};
     }
 
-    if (exists($opts{bcc})) {
+    if ( exists $opts{bcc} ) {
         push @objects, "Bcc";
-        $values{Bcc} = delete($opts{bcc});
+        $values{Bcc} = delete $opts{bcc};
     }
 
     my %data;
-    if (exists($opts{attachments})) {
-        my $files = delete($opts{attachments});
-        unless ('ARRAY' eq ref($files)) {
+    if ( exists $opts{attachments} ) {
+        my $files = delete $opts{attachments};
+        unless ( 'ARRAY' eq ref $files ) {
             RT::Client::REST::InvalidParameterValueException->throw(
                 "'attachments' must be an array reference",
             );
@@ -354,7 +356,7 @@ sub comment {
         }
     }
 
-    my $text = form_compose([[ '', \@objects, \%values, ]]);
+    my $text = $self->forms()->form_compose([[ '', \@objects, \%values, ]]);
     $data{content} = $text;
 
     $self->_submit("ticket/$ticket_id/comment", \%data);
@@ -368,6 +370,7 @@ sub merge_tickets {
     my $self = shift;
     $self->_assert_even(@_);
     my %opts = @_;
+
     my ($src, $dst) = map { $self->_valid_numeric_object_id($_) }
         @opts{qw(src dst)};
     $self->_submit("ticket/merge/$src", { into => $dst});
@@ -378,10 +381,10 @@ sub link_tickets {
     my $self = shift;
     $self->_assert_even(@_);
     my %opts = @_;
-    my ($src, $dst) = map { $self->_valid_numeric_object_id($_) }
-        @opts{qw(src dst)};
-    my $ltype = $self->_valid_link_type(delete($opts{link_type}));
-    my $del = (exists($opts{'unlink'}) ? 1 : '');
+
+    my ($src, $dst) = map { $self->_valid_numeric_object_id($_) } @opts{qw(src dst)};
+    my $ltype = $self->_valid_link_type( delete $opts{link_type} );
+    my $del = exists $opts{'unlink'} ? 1 : '';
 
     $self->_submit("ticket/link", {
         id  => $src,
@@ -397,29 +400,26 @@ sub unlink_tickets { shift->link_tickets(@_, unlink => 1) }
 
 sub _ticket_action {
     my $self = shift;
-
     $self->_assert_even(@_);
-
     my %opts = @_;
 
-    my $id = delete $opts{id};
+    my $id     = delete $opts{id};
     my $action = delete $opts{action};
 
-    my $text = form_compose([[ '', ['Action'], { Action => $action }, ]]);
-
-    my $form = form_parse(
+    my $text = $self->forms()->form_compose([[ '', ['Action'], { Action => $action }, ]]);
+    my $form = $self->forms()->form_parse(
         $self->_submit("/ticket/$id/take", { content => $text })->decoded_content
     );
-    my ($c, $o, $k, $e) = @{$$form[0]};
+    my ($c, $o, $k, $e) = @{ $form->[0] };
 
     if ($e) {
         RT::Client::REST::Exception->_rt_content_to_exception($c)->throw;
     }
 }
 
-sub take { shift->_ticket_action(@_, action => 'take') }
+sub take   { shift->_ticket_action(@_, action => 'take')   }
 sub untake { shift->_ticket_action(@_, action => 'untake') }
-sub steal { shift->_ticket_action(@_, action => 'steal') }
+sub steal  { shift->_ticket_action(@_, action => 'steal')  }
 
 sub _submit {
     my ($self, $uri, $content, $auth) = @_;
@@ -427,17 +427,17 @@ sub _submit {
 
     # Did the caller specify any data to send with the request?
     $data = [];
-    if (defined $content) {
-        unless (ref $content) {
+    if ( defined $content ) {
+        unless ( ref $content ) {
             # If it's just a string, make sure LWP handles it properly.
             # (By pretending that it's a file!)
             $content = [ content => [undef, "", Content => $content] ];
         }
-        elsif (ref $content eq 'HASH') {
+        elsif ( ref $content eq 'HASH' ) {
             my @data;
             foreach my $k (keys %$content) {
-                if (ref $content->{$k} eq 'ARRAY') {
-                    foreach my $v (@{ $content->{$k} }) {
+                if ( ref $content->{$k} eq 'ARRAY' ) {
+                    foreach my $v ( @{ $content->{$k} } ) {
                         push @data, $k, $v;
                     }
                 }
@@ -449,8 +449,8 @@ sub _submit {
     }
 
     # Should we send authentication information to start a new session?
-    unless ($self->_cookie || $self->basic_auth_cb) {
-        unless (defined($auth)) {
+    unless ( $self->_cookie || $self->basic_auth_cb() ) {
+        unless ( defined $auth ) {
             RT::Client::REST::RequiredAttributeUnsetException->throw(
                 "You must log in first",
             );
@@ -459,14 +459,14 @@ sub _submit {
     }
 
     # Now, we construct the request.
-    if (@$data) {
+    if ( @$data ) {
         $req = POST($self->_uri($uri), $data, Content_Type => 'form-data');
     }
     else {
         $req = GET($self->_uri($uri));
     }
     #$session->add_cookie_header($req);
-    if ($self->_cookie) {
+    if ( $self->_cookie ) {
         $self->_cookie->add_cookie_header($req);
     }
 
@@ -485,7 +485,7 @@ sub _submit {
         $text =~ s/\n*$/\n/ if ($text);
 
         # "RT/3.0.1 401 Credentials required"
-	if ($status !~ m#^RT/\d+(?:\S+) (\d+) ([\w\s]+)$#) {
+	    if ($status !~ m#^RT/\d+(?:\S+) (\d+) ([\w\s]+)$#) {
             RT::Client::REST::MalformedRTResponseException->throw(
                 "Malformed RT response received from " . $self->server,
             );
@@ -498,24 +498,24 @@ sub _submit {
         $res->message($2);
         $res->content($text);
         #$session->update($res) if ($res->is_success || $res->code != 401);
-        if ($res->header('set-cookie')) {
+        if ( $res->header('set-cookie') ) {
             my $jar = HTTP::Cookies->new;
             $jar->extract_cookies($res);
             $self->_cookie($jar);
         }
 
-        if (!$res->is_success) {
+        if ( !$res->is_success ) {
             # We can deal with authentication failures ourselves. Either
             # we sent invalid credentials, or our session has expired.
-            if ($res->code == 401) {
+            if ( $res->code == 401 ) {
                 my %d = @$data;
-                if (exists $d{user}) {
+                if ( exists $d{user} ) {
                     RT::Client::REST::AuthenticationFailureException->throw(
                         code    => $res->code,
                         message => "Incorrect username or password",
                     );
                 }
-                elsif ($req->header("Cookie")) {
+                elsif ( $req->header("Cookie") ) {
                     # We'll retry the request with credentials, unless
                     # we only wanted to logout in the first place.
                     #$session->delete;
@@ -572,9 +572,9 @@ sub _ua {
 sub basic_auth_cb {
     my $self = shift;
 
-    if (@_) {
+    if ( @_ ) {
         my $sub = shift;
-        unless ('CODE' eq ref($sub)) {
+        unless ( 'CODE' eq ref $sub ) {
             RT::Client::REST::InvalidParameterValueException->throw(
                 "'basic_auth_cb' must be a code reference",
             );
@@ -596,7 +596,7 @@ sub _list_of_valid_transaction_types {
 sub _valid_type {
     my ($self, $type) = @_;
 
-    unless ($type =~ /^[A-Za-z0-9_.-]+$/) {
+    unless ( $type =~ /^[A-Za-z0-9_.-]+$/ ) {
         RT::Client::REST::InvaildObjectTypeException->throw(
             "'$type' is not a valid object type",
         );
@@ -608,7 +608,7 @@ sub _valid_type {
 sub _valid_objects {
     my ($self, $objects) = @_;
 
-    unless ('ARRAY' eq ref($objects)) {
+    unless ( 'ARRAY' eq ref $objects ) {
         RT::Client::REST::InvalidParameterValueException->throw(
             "'objects' must be an array reference",
         );
@@ -620,7 +620,7 @@ sub _valid_objects {
 sub _valid_numeric_object_id {
     my ($self, $id) = @_;
 
-    unless ($id =~ m/^\d+$/) {
+    unless ( $id =~ m/^\d+$/ ) {
         RT::Client::REST::InvalidParameterValueException->throw(
             "'$id' is not a valid numeric object ID",
         );
@@ -632,19 +632,19 @@ sub _valid_numeric_object_id {
 sub _valid_comment_action {
     my ($self, $action) = @_;
 
-    unless (grep { $_ eq lc($action) } (qw(comment correspond))) {
+    unless ( grep { $_ eq lc($action) } qw(comment correspond) ) {
         RT::Client::REST::InvalidParameterValueException->throw(
             "'$action' is not a valid comment action",
         );
     }
 
-    return lc($action);
+    return lc $action;
 }
 
 sub _valid_comment_message {
     my ($self, $message) = @_;
 
-    unless (defined($message) and length($message)) {
+    unless ( defined $message and length $message ) {
         RT::Client::REST::InvalidParameterValueException->throw(
             "Comment cannot be empty (specify 'message' parameter)",
         );
@@ -658,19 +658,19 @@ sub _valid_link_type {
     my @types = qw(DependsOn DependedOnBy RefersTo ReferredToBy HasMember
                    MemberOf);
 
-    unless (grep { lc($type) eq lc($_) } @types) {
+    unless ( grep { lc $type eq lc $_ } @types ) {
         RT::Client::REST::InvalidParameterValueException->throw(
             "'$type' is not a valid link type",
         );
     }
 
-    return lc($type);
+    return lc $type;
 }
 
 sub _valid_transaction_type {
     my ($self, $type) = @_;
 
-    unless (grep { $type eq $_ } $self->_list_of_valid_transaction_types) {
+    unless ( grep { $type eq $_ } $self->_list_of_valid_transaction_types() ) {
         RT::Client::REST::InvalidParameterValueException->throw(
             "'$type' is not a valid transaction type.  Allowed types: " .
             join(", ", $self->_list_of_valid_transaction_types)
@@ -688,9 +688,9 @@ sub _assert_even {
 
 sub _rest {
     my $self = shift;
-    my $server = $self->server;
+    my $server = $self->server();
 
-    unless (defined($server)) {
+    unless ( defined $server ) {
         RT::Client::REST::RequiredAttributeUnsetException->throw(
             "'server' attribute is not set",
         );
@@ -703,7 +703,7 @@ sub _uri { shift->_rest . '/' . shift }
 
 sub _ua_string {
     my $self = shift;
-    return ref($self) . '/' . $self->_version;
+    return ref $self . '/' . $self->_version;
 }
 
 sub _version { $VERSION }
