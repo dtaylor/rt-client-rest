@@ -36,7 +36,7 @@ use RT::Client::REST::Forms38;
 use RT::Client::REST::HTTPClient;
 
 # Generate accessors/mutators
-for my $method (qw(server _cookie timeout version forms)) {
+for my $method (qw(server _cookie timeout rt_version forms)) {
     no strict 'refs';
     *{__PACKAGE__ . '::' . $method} = sub {
         my $self = shift;
@@ -58,7 +58,7 @@ sub new {
         $self->$k($v);
     }
     
-    if ($self->version eq '3.8') {
+    if ($self->rt_version() eq '3.8') {
         $self->forms(RT::Client::REST::Forms38->new());
     }
     else {
@@ -726,6 +726,7 @@ RT::Client::REST -- talk to RT installation using REST protocol.
   my $rt = RT::Client::REST->new(
     server => 'http://example.com/rt',
     timeout => 30,
+    rt_version => '3.8',
   );
 
   try {
@@ -775,6 +776,12 @@ B<server> is a URI pointing to your RT installation.
 If you have already authenticated against RT in some other
 part of your program, you can use B<_cookie> parameter to supply an object
 of type B<HTTP::Cookies> to use for credentials information.
+
+=item B<rt_version>
+
+B<rt_version> is the version of your RT. The REST forms changed between 3.6
+and 3.8, so you need to specify which version you wish to talk. Valid values
+are '3.8' and '3.6' (or technically anything else). Defaults to '3.8'.
 
 =item B<timeout>
 
