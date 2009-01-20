@@ -1,4 +1,4 @@
-# $Id: User.pm 2 2007-12-23 02:16:25Z dtikhonov $
+# $Id: User.pm 2 Mon Aug 25 12:18 EDT 2008 jpierce $
 #
 # RT::Client::REST::User -- user object representation.
 
@@ -8,7 +8,7 @@ use strict;
 use warnings;
 
 use vars qw($VERSION);
-$VERSION = '0.02';
+$VERSION = '0.03';
 
 use Params::Validate qw(:types);
 use RT::Client::REST 0.14;
@@ -41,7 +41,7 @@ Note: RT currently does not allow REST client to search users.
 =cut
 
 sub _attributes {{
-    id  => {
+    id => {
         validation  => {
             type    => SCALAR,
         },
@@ -54,42 +54,110 @@ sub _attributes {{
         },
     },
 
-    name   => {
+
+
+    priveleged => {
         validation  => {
             type    => SCALAR,
         },
     },
-
-    password   => {
+    name => {
         validation  => {
             type    => SCALAR,
         },
     },
-
+    password => {
+        validation  => {
+            type    => SCALAR,
+        },
+    },
     email_address => {
         validation  => {
             type    => SCALAR,
         },
         rest_name => 'EmailAddress',
     },
-
     real_name => {
         validation  => {
             type    => SCALAR,
         },
         rest_name => 'RealName',
     },
-
     gecos => {
         validation  => {
             type    => SCALAR,
         },
     },
-
     comments => {
         validation  => {
             type    => SCALAR,
         },
+    },
+
+
+
+    organization => {
+        validation  => {
+            type    => SCALAR,
+        },
+    },
+    address_one => {
+        validation  => {
+            type    => SCALAR,
+        },
+        rest_name   => 'Address1',
+    },
+    address_two => {
+        validation  => {
+            type    => SCALAR,
+        },
+        rest_name   => 'Address2',
+    },
+    city => {
+        validation  => {
+            type    => SCALAR,
+        },
+    },
+    state => {
+        validation  => {
+            type    => SCALAR,
+        },
+    },
+    zip => {
+        validation  => {
+            type    => SCALAR,
+        },
+    },
+    country => {
+        validation  => {
+            type    => SCALAR,
+        },
+    },
+
+
+    home_phone => {
+        validation  => {
+            type    => SCALAR,
+        },
+        rest_name   => 'HomePhone',
+    },
+    work_phone => {
+        validation  => {
+            type    => SCALAR,
+        },
+        rest_name   => 'WorkPhone',
+    },
+    cell_phone => {
+        validation  => {
+            type    => SCALAR,
+        },
+        rest_name   => 'MobilePhone',
+    },
+    pager => {
+        validation  => {
+            type    => SCALAR,
+        },
+        rest_name   => 'PagerPhone',
     },
 }}
 
@@ -112,13 +180,17 @@ This is the username of the user.
 User's password.  Reading it will only give you a bunch of stars (what
 else would you expect?).
 
+=item B<priveleged>
+
+Can the user have special rights?
+
 =item B<email_address>
 
-E-mail address of the user.
+E-mail address of the user, EmailAddress.
 
 =item B<real_name>
 
-Real name of the user.
+Real name of the user, RealName.
 
 =item B<gecos>
 
@@ -127,6 +199,44 @@ Gecos.
 =item B<comments>
 
 Comments about this user.
+
+=item B<organization>
+
+=item B<address_one>
+
+First line of the street address, Address1.
+
+=item B<address_two>
+
+Second line of the street address, Address2.
+
+=item B<city>
+
+City segment of user's address.
+
+=item B<zip>
+
+ZIP or Postal code segment of user's address.
+
+=item B<country>
+
+Country segment of user's address.
+
+=item B<home_phone>
+
+User's home phone number, HomePhone.
+
+=item B<work_phone>
+
+User's work phone number, WorkPhone.
+
+=item B<cell_phone>
+
+User's cell phone number, MobilePhone.
+
+=item B<pager>
+
+User's pager number, PagerPhone.
 
 =back
 
